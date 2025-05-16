@@ -78,7 +78,7 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 
 	// audio devices
 	for (const auto &dev : devices) ui->input_device->addItem(dev.description());
-	auto changeSignal = static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged);
+	const auto changeSignal = static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged);
 
 	connect(ui->input_device, changeSignal, this, &MainWindow::deviceChanged);
 	deviceChanged();
@@ -87,14 +87,14 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 
 	QString cfgfilepath = find_config_file(config_file);
 	load_config(cfgfilepath);
-	checkAudioFormat();
+	checkAudioFormat(cfgfilepath.length() > 0);
 }
 
 QAudioDevice MainWindow::currentDevice() const {
 	return devices.at(ui->input_device->currentIndex());
 }
 
-void MainWindow::deviceChanged() {
+void MainWindow::deviceChanged() const {
 	auto const dev = currentDevice();
 
 	// Channel count
@@ -105,13 +105,19 @@ void MainWindow::deviceChanged() {
 	ui->input_samplerate->setMinimum(dev.minimumSampleRate());
 	ui->input_samplerate->setMaximum(dev.maximumSampleRate());
 	ui->input_samplerate->setValue(dev.preferredFormat().sampleRate());
+	ui->input_samplerate->setToolTip(
+		QString("%1 - %2 Hz")
+		.arg(dev.minimumSampleRate())
+		.arg(dev.maximumSampleRate())
+	);  // Not showing up?
+	ui->input_samplerate->setToolTipDuration(5000);
 	// Sample format
-	ui->input_samplesize->clear();
+	ui->input_sampleformat->clear();
 	for (auto samp_fmt : dev.supportedSampleFormats()) {
-		ui->input_samplesize->addItem(sampleFormatToString(samp_fmt), QVariant::fromValue(samp_fmt));
+		ui->input_sampleformat->addItem(sampleFormatToString(samp_fmt), QVariant::fromValue(samp_fmt));
 	}
 	auto const fmt(dev.preferredFormat());
-	if (const auto idx = ui->input_samplesize->findData(QVariant::fromValue(fmt.sampleFormat())); idx >= 0) ui->input_samplesize->setCurrentIndex(idx);
+	if (const auto idx = ui->input_sampleformat->findData(QVariant::fromValue(fmt.sampleFormat())); idx >= 0) ui->input_sampleformat->setCurrentIndex(idx);
 	setFmt(fmt);
 }
 
@@ -123,29 +129,30 @@ QAudioFormat MainWindow::selectedAudioFormat() const {
 	fmt.setChannelCount(ui->input_channels->value());
 	// fmt.setByteOrder(QAudioFormat::LittleEndian);
 	// fmt.setChannelConfig(??);
-	fmt.setSampleFormat(stringToSampleFormat(ui->input_samplesize->currentText()));
+	fmt.setSampleFormat(stringToSampleFormat(ui->input_sampleformat->currentText()));
 	return fmt;
 }
 
-void MainWindow::setFmt(const QAudioFormat &fmt) {
+void MainWindow::setFmt(const QAudioFormat &fmt) const {
 	qInfo() << "Setting fmt: " << fmt;
 	ui->input_samplerate->setValue(fmt.sampleRate());
-	ui->input_samplesize->setCurrentText(sampleFormatToString(fmt.sampleFormat()));
+	ui->input_sampleformat->setCurrentText(sampleFormatToString(fmt.sampleFormat()));
 	ui->input_channels->setValue(fmt.channelCount());
-	auto fmtStr = QStringLiteral("%1 channels, %2 bit @ %3 Hz")
+	const auto fmtStr = QStringLiteral("%1 channels, %2 bit @ %3 Hz")
 					  .arg(fmt.channelCount())
 					  .arg(fmt.sampleFormat())
 					  .arg(fmt.sampleRate());
 	ui->label_fmtresult->setText(fmtStr);
 }
 
-void MainWindow::checkAudioFormat() {
+void MainWindow::checkAudioFormat(const bool showModal = true) {
 	auto fmt = selectedAudioFormat();
 	if (const auto dev = currentDevice(); dev.isFormatSupported(fmt))
 		qInfo() << "Format is supported";
 	else {
-		QMessageBox::warning(this, "Format not supported",
-			"The requested format isn't supported; the preferred format was automatically selected.");
+		if (showModal)
+			QMessageBox::warning(this, "Format not supported",
+				"The requested format isn't supported; the preferred format was automatically selected.");
 		fmt = dev.preferredFormat();
 	}
 	setFmt(fmt);
@@ -157,7 +164,7 @@ void MainWindow::load_config(const QString &filename) const {
 	ui->input_device->setCurrentIndex(settings.value("AudioCapture/device", 0).toInt());
 	ui->input_samplerate->setValue(settings.value("AudioCapture/samplerate", 1).toInt());
 	const QString sampleSize = settings.value("AudioCapture/samplesize", "Int16").toString();
-	ui->input_samplesize->setCurrentIndex(ui->input_samplesize->findData(QVariant::fromValue(sampleSize)));
+	ui->input_sampleformat->setCurrentIndex(ui->input_sampleformat->findData(QVariant::fromValue(sampleSize)));
 	ui->input_channels->setValue(settings.value("AudioCapture/channels", 0).toInt());
 }
 
@@ -167,7 +174,7 @@ void MainWindow::save_config(const QString &filename) const {
 	settings.setValue("name", ui->input_name->text());
 	settings.setValue("device", ui->input_device->currentIndex());
 	settings.setValue("samplerate", ui->input_samplerate->value());
-	settings.setValue("samplesize", ui->input_samplesize->currentText());
+	settings.setValue("samplesize", ui->input_sampleformat->currentText());
 	settings.setValue("channels", ui->input_channels->value());
 	settings.sync();
 }

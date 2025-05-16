@@ -19,14 +19,14 @@ public:
 private slots:
 	void closeEvent(QCloseEvent *ev) override;
 	void toggleRecording();
-	void deviceChanged();
-	void checkAudioFormat();
+	void deviceChanged() const;
+	void checkAudioFormat(bool showModal);
 
 private:
 	// Audio device handling
-	QAudioDevice currentDevice() const;
-	void setFmt(const QAudioFormat &fmt);
-	QAudioFormat selectedAudioFormat() const;
+	[[nodiscard]] QAudioDevice currentDevice() const;
+	void setFmt(const QAudioFormat &fmt) const;
+	[[nodiscard]] QAudioFormat selectedAudioFormat() const;
 	// void updateSampleRates();
 
 	// function for loading / saving the config file
