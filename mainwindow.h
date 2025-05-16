@@ -1,7 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 #include "ui_mainwindow.h"
-#include <QAudioDeviceInfo>
+#include <QMediaDevices>
+#include <QAudioDevice>
 #include <QMainWindow>
 #include <memory> //for std::unique_ptr
 
@@ -23,20 +24,19 @@ private slots:
 
 private:
 	// Audio device handling
-	QAudioDeviceInfo currentDeviceInfo();
+	QAudioDevice currentDevice() const;
 	void setFmt(const QAudioFormat &fmt);
-	QAudioFormat selectedAudioFormat();
-	void updateSampleRates();
-	void updateComboBoxItems(QComboBox *box, QList<int> values);
+	QAudioFormat selectedAudioFormat() const;
+	// void updateSampleRates();
 
 	// function for loading / saving the config file
 	QString find_config_file(const char *filename);
-	void load_config(const QString &filename);
-	void save_config(const QString &filename);
+	void load_config(const QString &filename) const;
+	void save_config(const QString &filename) const;
 	std::unique_ptr<class LslPusher> reader;
-	std::unique_ptr<class QAudioInput> audiodev;
+	std::unique_ptr<class QAudioSource> audiosrc;
 	std::unique_ptr<Ui::MainWindow> ui; // window pointer
-	QList<QAudioDeviceInfo> devices;
+	QList<QAudioDevice> devices;
 };
 
 #endif // MAINWINDOW_H

@@ -7,7 +7,7 @@ LslPusher::LslPusher(lsl::stream_outlet &&outlet)
 	: out(std::move(outlet)), sample_bytes(out.info().sample_bytes()),
 	  cf(out.info().channel_format()) {}
 
-qint64 LslPusher::writeData(const char* data, qint64 maxSize)
+qint64 LslPusher::writeData(const char* data, const qint64 maxSize)
 {
 	// qInfo() << "Write " << maxSize << ' ' << (maxSize/sample_bytes) << ' ' << (maxSize%sample_bytes);
 	switch(cf) {

@@ -85,6 +85,7 @@ foreach(_lib ${THIRD_PARTY_DLLS})
 endforeach()
 
 if(Qt6_FOUND)
+	set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.labstreaminglayer.AudioCapture")
 	qt_finalize_executable(${PROJECT_NAME})
 endif()
 

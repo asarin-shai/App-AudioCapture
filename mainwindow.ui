@@ -62,9 +62,6 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="1">
-     <widget class="QComboBox" name="input_samplerate"/>
-    </item>
     <item row="5" column="0">
      <widget class="QLabel" name="label_samplesize">
       <property name="text">
@@ -74,9 +71,6 @@
     </item>
     <item row="5" column="1">
      <widget class="QComboBox" name="input_samplesize"/>
-    </item>
-    <item row="6" column="1">
-     <widget class="QComboBox" name="input_channels"/>
     </item>
     <item row="8" column="1">
      <widget class="QLabel" name="label_fmtresult"/>
@@ -114,6 +108,23 @@
       </property>
      </widget>
     </item>
+    <item row="4" column="1">
+     <widget class="QSpinBox" name="input_samplerate">
+      <property name="maximum">
+       <number>99999</number>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="1">
+     <widget class="QSpinBox" name="input_channels">
+      <property name="maximum">
+       <number>20</number>
+      </property>
+      <property name="value">
+       <number>1</number>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">
@@ -122,7 +133,7 @@
      <x>0</x>
      <y>0</y>
      <width>254</width>
-     <height>30</height>
+     <height>37</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
