@@ -1,6 +1,6 @@
 # Overview
 
-The AudioCapture application uses Qt's [QAudioInput](https://doc.qt.io/qt-5/qaudioinput.html) for cross-platform audio capturing.
+The AudioCapture application uses Qt's [QAudioSource](https://doc.qt.io/qt-6/qaudiosource.html) for cross-platform audio capturing.
 This program has been tested on Windows and MacOS. Download the latest version [from the releases page](https://github.com/labstreaminglayer/App-AudioCapture/releases).
 
 The Windows release requires vc_redist.x64.exe [from Microsoft](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads).
@@ -9,7 +9,7 @@ The Windows release requires vc_redist.x64.exe [from Microsoft](https://support.
 Using this app is very simple:
 
   * Make sure that you have connected a microphone to your computer.
-  * On Ubuntu, you need to `sudo apt-get install libqt5multimedia5-plugins`
+  * On Ubuntu, you need to `sudo apt-get install libqt6multimedia6`
   * Start the AudioCapture app. You should see a window like the following.
 > ![audiocapture.PNG](audiocapture.PNG)
   * Set the audio capture parameters.
@@ -23,8 +23,12 @@ Using this app is very simple:
 
 # Build
 
-The build instructions for this app are mostly the same as the [generic LSL App build instructions](https://labstreaminglayer.readthedocs.io/dev/app_build.html).
-Qt Multimedia module is required. On Ubuntu this does not come with qt5 by default. Install it with `sudo apt-get install qtmultimedia5-dev`. On Mac, with homebrew, it is only included in qt6 >= 6.2, which isn't out yet, so qt5 is required.
+The build instructions for this app are mostly the same as the [generic Qt-based LSL App build instructions](https://labstreaminglayer.readthedocs.io/dev/app_build.html).
+Additionally, Qt Multimedia development libraries are required:
+
+* On Ubuntu, install it with `sudo apt-get install qt6-multimedia-dev`.
+* On Mac (using homebrew) or Windows, the multimedia libraries should come with the Qt6 installation.
+
 On Mac, it appears to be necessary to use the Xcode generator: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX="build/install" -G Xcode`
 
 Note that code-signing has been disabled.
