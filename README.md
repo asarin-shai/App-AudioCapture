@@ -1,21 +1,12 @@
 # Overview
 
-The AudioCapture application uses Qt's [QAudioSource](https://doc.qt.io/qt-6/qaudiosource.html) for cross-platform audio capturing.
-This program has been tested on Windows and MacOS.
-
-The Windows release requires vc_redist.x64.exe [from Microsoft](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads).
+The AudioCapture application uses Qt's [QAudioSource](https://doc.qt.io/qt-6/qaudiosource.html) for cross-platform audio capturing and streaming over [LSL](https://labstreaminglayer.org).
 
 # Getting Started
 
 Download the latest version [from the releases page](https://github.com/labstreaminglayer/App-AudioCapture/releases).
 
-## Extra Dependencies (Ubuntu only)
-
-* `sudo apt-get install libqt6multimedia6`
-* TODO: Instructions to download and install liblsl
-* Other platforms ship with the Qt libraries.
-
-## Usage
+The Windows release requires vc_redist.x64.exe; if you don't already have it then you can install the download [from Microsoft](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads).
 
 Using this app is very simple:
 
@@ -32,16 +23,50 @@ Using this app is very simple:
   * You should now have a stream on your lab network that has type "Audio" and its name is the name entered in the GUI.
   * Note that you cannot close the app while it is linked.
 
-# Build
+# Build from source
 
-The build instructions for this app are mostly the same as the [generic Qt-based LSL App build instructions](https://labstreaminglayer.readthedocs.io/dev/app_build.html).
+## Pre-requisites
 
-Additionally, Qt Multimedia development libraries are required:
+### liblsl
 
-* On Ubuntu, install it with `sudo apt-get install qt6-multimedia-dev`.
-* On other platforms, the Qt Multimedia libraries should be included in the Qt installation.
+TODO
 
-On Mac, it appears to be necessary to use the Xcode generator: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX="build/install" -G Xcode`
+### Qt6 >= 6.5
+
+* MacOS: `brew install qt`
+* Windows or Linux: Download and run installer
+  * You will need a (free) Qt account
+  * This is an open source project so you can use the LGPL Qt6 open source version
+  * QtMultimedia should be enabled by default so default options are fine
+
+### Build Essentials
+
+* CMake >= 3.25
+* Compiler
+
+## Instructions
+
+** Configure: **
+  * MacOS: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=build/install -DCMAKE_BUILD_TYPE=Release -G Xcode`
+  * Linux: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=build/install -DCMAKE_BUILD_TYPE=Release -DQt6_DIR=~/Qt/6.9.1/gcc_64/lib/cmake/Qt6`
+  * Windows: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=build/install -DCMAKE_BUILD_TYPE=Release -DQt6_DIR=C:\\Qt\\6.9.1\\mingw_64\\lib\\cmake\\Qt6`
+
+** Build: **
+  * `cmake --build build -DCMAKE_BUILD_TYPE=Release --target install`
+
+Note on MacOS: If the `APPLE_CODE_SIGN_IDENTITY_APP` env variable is set then the package will be code-signed at this stage.
+
+** Package: **
+
+TODO
+
+** Notarization (MacOS only; Optional): **
+
+TODO
+
+** Deploy and Use: **
+
+Without the packaging step in place, the build/install/ folder will container  
 
 # Further Notes
 
