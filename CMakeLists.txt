@@ -34,7 +34,7 @@ find_package(Threads REQUIRED)
 
 # Create the target
 qt_add_executable(${PROJECT_NAME} MACOSX_BUNDLE MANUAL_FINALIZATION)
-set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.labstreaminglayer.AudioCapture")
+set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.labstreaminglayer.AudioCapture")
 target_sources(${PROJECT_NAME} PRIVATE
     main.cpp
     mainwindow.cpp
@@ -63,6 +63,7 @@ endif(APPLE)
 
 if(WIN32)
 	# Copy the required dll's into the build folder --> useful for debugging from IDE
+	# TODO: More to be done: "The application failed to start because no Qt platform plugin could be initialized."
 	# create a list of files to copy
 	set(THIRD_PARTY_DLLS
 			LSL::lsl
@@ -91,6 +92,13 @@ install(
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+if(WIN32)
+    install(FILES $<TARGET_FILE:LSL::lsl>
+        DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT ${PROJECT_NAME}
+    )
+endif()
 
 if(APPLE)
 	# Install LSL framework into bundle
