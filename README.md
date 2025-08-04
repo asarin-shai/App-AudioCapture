@@ -1,15 +1,25 @@
 # Overview
 
 The AudioCapture application uses Qt's [QAudioSource](https://doc.qt.io/qt-6/qaudiosource.html) for cross-platform audio capturing.
-This program has been tested on Windows and MacOS. Download the latest version [from the releases page](https://github.com/labstreaminglayer/App-AudioCapture/releases).
+This program has been tested on Windows and MacOS.
 
 The Windows release requires vc_redist.x64.exe [from Microsoft](https://support.microsoft.com/en-gb/help/2977003/the-latest-supported-visual-c-downloads).
 
-# Usage
+# Getting Started
+
+Download the latest version [from the releases page](https://github.com/labstreaminglayer/App-AudioCapture/releases).
+
+## Extra Dependencies (Ubuntu only)
+
+* `sudo apt-get install libqt6multimedia6`
+* TODO: Instructions to download and install liblsl
+* Other platforms ship with the Qt libraries.
+
+## Usage
+
 Using this app is very simple:
 
   * Make sure that you have connected a microphone to your computer.
-  * On Ubuntu, you need to `sudo apt-get install libqt6multimedia6`
   * Start the AudioCapture app. You should see a window like the following.
 > ![audiocapture.PNG](audiocapture.PNG)
   * Set the audio capture parameters.
@@ -19,19 +29,19 @@ Using this app is very simple:
   * Click the "Link" button to link the app to the lab network. If successful, the button should turn into "Unlink".
   * If a firewall complains, allow the app to connect to the network.
   * Please allow microphone access if asked.
-  * You should now have a stream on your lab network that has type "Audio" and its name is the name entered in the GUI. Note that you cannot close the app while it is linked.
+  * You should now have a stream on your lab network that has type "Audio" and its name is the name entered in the GUI.
+  * Note that you cannot close the app while it is linked.
 
 # Build
 
 The build instructions for this app are mostly the same as the [generic Qt-based LSL App build instructions](https://labstreaminglayer.readthedocs.io/dev/app_build.html).
+
 Additionally, Qt Multimedia development libraries are required:
 
 * On Ubuntu, install it with `sudo apt-get install qt6-multimedia-dev`.
-* On Mac (using homebrew) or Windows, the multimedia libraries should come with the Qt6 installation.
+* On other platforms, the Qt Multimedia libraries should be included in the Qt installation.
 
 On Mac, it appears to be necessary to use the Xcode generator: `cmake -B build -S . -DCMAKE_INSTALL_PREFIX="build/install" -G Xcode`
-
-Note that code-signing has been disabled.
 
 # Further Notes
 
