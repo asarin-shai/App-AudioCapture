@@ -62,24 +62,28 @@ if(APPLE)
 endif(APPLE)
 
 if(WIN32)
-	# Copy the required dll's into the build folder --> useful for debugging from IDE
-	# TODO: More to be done: "The application failed to start because no Qt platform plugin could be initialized."
-	# create a list of files to copy
-	set(THIRD_PARTY_DLLS
-			LSL::lsl
-			Qt::Core
-			Qt::Gui
-			Qt::Widgets
-			Qt::DBus
-			Qt::Multimedia
-			Qt::Network
+	# Copy all required DLLs into the build folder --> useful for debugging from IDE
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+			$<TARGET_FILE_DIR:${PROJECT_NAME}>
+		COMMAND_EXPAND_LISTS
+		COMMENT "Copying runtime dependencies for ${PROJECT_NAME}"
 	)
-	foreach(_lib ${THIRD_PARTY_DLLS})
-		add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				$<TARGET_FILE:${_lib}>
-				$<TARGET_FILE_DIR:${PROJECT_NAME}>)
-	endforeach()
+    get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
+    execute_process(
+        COMMAND ${_qmake_executable} -query QT_INSTALL_PLUGINS
+        OUTPUT_VARIABLE QT_PLUGINS_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${QT_PLUGINS_DIR}/platforms"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${QT_PLUGINS_DIR}/styles"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/styles")
 endif(WIN32)
 
 qt_finalize_target(${PROJECT_NAME})
