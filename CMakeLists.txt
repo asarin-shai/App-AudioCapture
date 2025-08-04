@@ -22,6 +22,8 @@ find_package(LSL REQUIRED
     HINTS ${LSL_INSTALL_ROOT}
     "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/build/"
     "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/build/install"
+	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/cmake-build-release/install"
+	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/cmake-build-release-visual-studio/install"
     "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/build/x64-Release"
     "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/install/x64-Release"
     PATH_SUFFIXES share/LSL)
