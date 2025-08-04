@@ -9,4 +9,4 @@ out/
 .DS_Store
 LSL/
 liblsl.tar.bz2
-
+.idea/
