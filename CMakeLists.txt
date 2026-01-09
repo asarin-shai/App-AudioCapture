@@ -1,40 +1,163 @@
-cmake_minimum_required(VERSION 3.25)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum MacOS deployment version")
+# =============================================================================
+# AudioCapture - CMakeLists.txt
+# =============================================================================
+# Capture audio and stream it over Lab Streaming Layer.
+# =============================================================================
+
+cmake_minimum_required(VERSION 3.28)
+
+# CMP0177: install() DESTINATION paths are normalized (CMake 3.31+)
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
 
 project(AudioCapture
+    VERSION 0.2.0
     DESCRIPTION "Capture audio and stream it over LabStreamingLayer"
     HOMEPAGE_URL "https://github.com/labstreaminglayer/App-AudioCapture/"
     LANGUAGES CXX C
-    VERSION 0.1)
+)
 
-# Needed for customized MacOSXBundleInfo.plist.in
-SET(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake" ${CMAKE_MODULE_PATH})
-
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-## Qt
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network DBus Multimedia)
-qt_standard_project_setup()
+# =============================================================================
+# LSL Discovery Options
+# =============================================================================
+# Priority 1: Build from local source (for parallel liblsl development)
+set(LSL_SOURCE_DIR "" CACHE PATH "Path to liblsl source directory")
 
-# LSL
-find_package(LSL REQUIRED
-    HINTS ${LSL_INSTALL_ROOT}
-    "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/build/"
-    "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/build/install"
-	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/cmake-build-release/install"
-	"${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/cmake-build-release-visual-studio/install"
-    "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/build/x64-Release"
-    "${CMAKE_CURRENT_LIST_DIR}/../../LSL/liblsl/out/install/x64-Release"
-    PATH_SUFFIXES share/LSL)
-get_filename_component(LSL_PATH ${LSL_CONFIG} DIRECTORY)
-include("${LSL_PATH}/LSLCMake.cmake")
+# Priority 2: Use explicit installation path
+set(LSL_INSTALL_ROOT "" CACHE PATH "Path to installed liblsl")
 
+# Priority 3: System installation (searched automatically)
+
+# Priority 4: Fetch from GitHub if not found
+option(LSL_FETCH_IF_MISSING "Fetch liblsl from GitHub if not found locally" ON)
+# TODO: Change back to version tag (e.g., "v1.16.2") once apple_framework branch is merged
+set(LSL_FETCH_REF "cboulay/apple_framework" CACHE STRING "liblsl git ref to fetch (tag, branch, or commit)")
+
+# =============================================================================
+# Find/Fetch liblsl
+# =============================================================================
+if(LSL_SOURCE_DIR)
+    # Priority 1: Build from local source (parallel development)
+    if(NOT EXISTS "${LSL_SOURCE_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "LSL_SOURCE_DIR set to '${LSL_SOURCE_DIR}' but no CMakeLists.txt found there")
+    endif()
+    message(STATUS "Using local liblsl source: ${LSL_SOURCE_DIR}")
+    add_subdirectory("${LSL_SOURCE_DIR}" liblsl_bin EXCLUDE_FROM_ALL)
+    if(NOT TARGET LSL::lsl)
+        add_library(LSL::lsl ALIAS lsl)
+    endif()
+    set(LSL_FOUND TRUE)
+else()
+    # Priority 2 & 3: Try to find installed liblsl
+    set(_lsl_hints)
+    if(LSL_INSTALL_ROOT)
+        list(APPEND _lsl_hints "${LSL_INSTALL_ROOT}")
+    endif()
+    # Common development layout hints
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" _build_type_lower)
+    foreach(_root IN ITEMS "../liblsl" "../../LSL/liblsl")
+        foreach(_build IN ITEMS "build" "cmake-build-${_build_type_lower}")
+            list(APPEND _lsl_hints "${CMAKE_CURRENT_LIST_DIR}/${_root}/${_build}/install")
+        endforeach()
+    endforeach()
+
+    set(_lsl_suffixes
+        share/LSL
+        lib/cmake/LSL
+        cmake
+        Frameworks/lsl.framework/Resources/CMake  # macOS framework layout
+    )
+
+    # First try: Search only in hints (prefer local builds over system)
+    find_package(LSL QUIET
+        HINTS ${_lsl_hints}
+        PATH_SUFFIXES ${_lsl_suffixes}
+        NO_DEFAULT_PATH
+    )
+
+    # Second try: Search system paths if not found in hints
+    if(NOT LSL_FOUND)
+        find_package(LSL QUIET
+            PATH_SUFFIXES ${_lsl_suffixes}
+        )
+    endif()
+
+    if(LSL_FOUND)
+        message(STATUS "Found installed liblsl: ${LSL_DIR}")
+    elseif(LSL_FETCH_IF_MISSING)
+        # Priority 4: Fetch from GitHub
+        message(STATUS "liblsl not found locally, fetching ${LSL_FETCH_REF} from GitHub...")
+        include(FetchContent)
+        # Disable liblsl extras we don't need
+        set(LSL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(LSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        # EXCLUDE_FROM_ALL prevents liblsl's install rules from running
+        FetchContent_Declare(liblsl
+            GIT_REPOSITORY https://github.com/sccn/liblsl.git
+            GIT_TAG ${LSL_FETCH_REF}
+            GIT_SHALLOW ON
+            EXCLUDE_FROM_ALL
+        )
+        FetchContent_MakeAvailable(liblsl)
+        if(NOT TARGET LSL::lsl)
+            add_library(LSL::lsl ALIAS lsl)
+        endif()
+        set(LSL_FOUND TRUE)
+        message(STATUS "liblsl fetched and configured")
+    else()
+        message(FATAL_ERROR
+            "liblsl not found. Options:\n"
+            "  1. Set LSL_SOURCE_DIR to liblsl source directory\n"
+            "  2. Set LSL_INSTALL_ROOT to installed liblsl location\n"
+            "  3. Install liblsl system-wide\n"
+            "  4. Enable LSL_FETCH_IF_MISSING=ON to auto-fetch from GitHub"
+        )
+    endif()
+endif()
+
+# =============================================================================
+# Qt6
+# =============================================================================
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia)
+
+# macOS: Work around deprecated AGL framework issue in some Qt6 builds
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_wrap_gl_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if(_wrap_gl_libs)
+        list(FILTER _wrap_gl_libs EXCLUDE REGEX ".*AGL.*")
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES INTERFACE_LINK_LIBRARIES "${_wrap_gl_libs}")
+    endif()
+endif()
+
+# =============================================================================
+# Common Dependencies
+# =============================================================================
 find_package(Threads REQUIRED)
 
-# Create the target
-qt_add_executable(${PROJECT_NAME} MACOSX_BUNDLE MANUAL_FINALIZATION)
-set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.labstreaminglayer.AudioCapture")
+# =============================================================================
+# RPATH Configuration (must be set before targets are created)
+# =============================================================================
+if(APPLE)
+    set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks")
+elseif(UNIX AND NOT ANDROID)
+    set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib")
+endif()
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# =============================================================================
+# Application Target
+# =============================================================================
+qt_add_executable(${PROJECT_NAME} MACOSX_BUNDLE)
+
 target_sources(${PROJECT_NAME} PRIVATE
     main.cpp
     mainwindow.cpp
@@ -44,108 +167,210 @@ target_sources(${PROJECT_NAME} PRIVATE
     reader.cpp
 )
 
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
+target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt::Widgets
     Qt::Multimedia
-    Qt::DBus
     Threads::Threads
     LSL::lsl
 )
 
+# macOS bundle configuration
 if(APPLE)
-	# Code signing is not required for debugging, and our deployment script will handle signing for release builds.
-	set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
-	set_target_properties(${PROJECT_NAME} PROPERTIES
-		XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
-	)
-endif(APPLE)
-
-if(WIN32)
-	# Copy all required DLLs into the build folder --> useful for debugging from IDE
-	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			$<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
-			$<TARGET_FILE_DIR:${PROJECT_NAME}>
-		COMMAND_EXPAND_LISTS
-		COMMENT "Copying runtime dependencies for ${PROJECT_NAME}"
-	)
-    get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
-    execute_process(
-        COMMAND ${_qmake_executable} -query QT_INSTALL_PLUGINS
-        OUTPUT_VARIABLE QT_PLUGINS_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.labstreaminglayer.${PROJECT_NAME}")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
     )
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${QT_PLUGINS_DIR}/platforms"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms")
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${QT_PLUGINS_DIR}/styles"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/styles")
-endif(WIN32)
+endif()
 
 qt_finalize_target(${PROJECT_NAME})
 
-install(
-    TARGETS ${PROJECT_NAME}
-    COMPONENT ${PROJECT_NAME}
-    BUNDLE DESTINATION .
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+# =============================================================================
+# Installation
+# =============================================================================
+include(GNUInstallDirs)
+
+# Platform-specific install directories
+if(WIN32)
+    set(INSTALL_BINDIR ".")
+    set(INSTALL_LIBDIR ".")
+elseif(APPLE)
+    set(INSTALL_BINDIR ".")
+    set(INSTALL_LIBDIR ".")
+else()
+    set(INSTALL_BINDIR "${CMAKE_INSTALL_BINDIR}")
+    set(INSTALL_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+endif()
+
+install(TARGETS ${PROJECT_NAME}
+    BUNDLE DESTINATION "${INSTALL_BINDIR}"
+    RUNTIME DESTINATION "${INSTALL_BINDIR}"
 )
+
+# =============================================================================
+# Bundle liblsl with the application
+# =============================================================================
+# Detect if liblsl is from FetchContent (regular target) or find_package (imported)
+set(_lsl_is_fetched FALSE)
+if(TARGET lsl)
+    get_target_property(_lsl_imported lsl IMPORTED)
+    if(NOT _lsl_imported)
+        set(_lsl_is_fetched TRUE)
+    endif()
+endif()
+
+if(APPLE)
+    # macOS: Install framework into app bundle
+    install(CODE "
+        set(_lsl_binary \"$<TARGET_FILE:LSL::lsl>\")
+        cmake_path(GET _lsl_binary PARENT_PATH _lsl_fw_dir)  # Versions/A
+        cmake_path(GET _lsl_fw_dir PARENT_PATH _lsl_fw_dir)  # Versions
+        cmake_path(GET _lsl_fw_dir PARENT_PATH _lsl_fw_dir)  # lsl.framework
+        message(STATUS \"Bundling lsl.framework from: \${_lsl_fw_dir}\")
+        file(COPY \"\${_lsl_fw_dir}\"
+            DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app/Contents/Frameworks\"
+            USE_SOURCE_PERMISSIONS
+        )
+    ")
+elseif(WIN32)
+    if(_lsl_is_fetched)
+        install(TARGETS lsl RUNTIME DESTINATION "${INSTALL_BINDIR}")
+    else()
+        install(IMPORTED_RUNTIME_ARTIFACTS LSL::lsl RUNTIME DESTINATION "${INSTALL_BINDIR}")
+    endif()
+else()
+    # Linux: Use modern CMake install commands that handle symlinks properly
+    if(_lsl_is_fetched)
+        install(TARGETS lsl LIBRARY DESTINATION "${INSTALL_LIBDIR}")
+    else()
+        install(IMPORTED_RUNTIME_ARTIFACTS LSL::lsl LIBRARY DESTINATION "${INSTALL_LIBDIR}")
+    endif()
+endif()
+
+# =============================================================================
+# Qt Deployment
+# =============================================================================
+get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
+get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
 
 if(WIN32)
-    install(FILES $<TARGET_FILE:LSL::lsl>
-        DESTINATION ${CMAKE_INSTALL_BINDIR}
-        COMPONENT ${PROJECT_NAME}
-    )
-endif()
-
-if(APPLE)
-	# Install LSL framework into bundle
-	get_filename_component(LSL_RESOURCES_DIR ${LSL_PATH} DIRECTORY)
-	get_filename_component(LSL_FRAMEWORK_DIR ${LSL_RESOURCES_DIR} DIRECTORY)
-	install(DIRECTORY "${LSL_FRAMEWORK_DIR}"
-			DESTINATION "${PROJECT_NAME}.app/Contents/Frameworks"
-			COMPONENT ${PROJECT_NAME})
-
-	# The following should already be part of the INSTALL_RPATH so we don't need to append it.
-	#	set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY INSTALL_RPATH "@executable_path/../Frameworks")
-
-	# Additionally, the qt_generate_deploy_app_script() will remove /Library/Frameworks from the rpath,
-	#  meaning that we don't have to worry about the LSL framework being found in the system paths.
-	#  i.e., it's OK that the install name for lsl.framework is set to @rpath/lsl.framework/Versions/A/lsl.
-	#  and not to @executable_path/../Frameworks/lsl.framework/Versions/A/lsl.
-endif()
-
-qt_generate_deploy_app_script(
-    TARGET ${PROJECT_NAME}
-    OUTPUT_SCRIPT deploy_script_path
-    NO_TRANSLATIONS
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
-install(SCRIPT ${deploy_script_path})
-
-if(APPLE)
-    # Add a post-install step to codesign the app bundle, but only if the APPLE_CODE_SIGN_IDENTITY_APP is set.
-    install(CODE "
-        if(NOT \"$ENV{APPLE_CODE_SIGN_IDENTITY_APP}\" STREQUAL \"\")
-            message(STATUS \"Codesigning app bundle with identity: $ENV{APPLE_CODE_SIGN_IDENTITY_APP}\")
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
+    if(WINDEPLOYQT_EXECUTABLE)
+        install(CODE "
+            message(STATUS \"Running windeployqt...\")
             execute_process(
-                COMMAND codesign -vvv --force --deep --sign \"$ENV{APPLE_CODE_SIGN_IDENTITY_APP}\" --options runtime \"${CMAKE_INSTALL_PREFIX}/${PROJECT_NAME}.app\"
-                RESULT_VARIABLE result
+                COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
+                    --no-translations
+                    --no-system-d3d-compiler
+                    --no-opengl-sw
+                    --no-compiler-runtime
+                    --dir \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}\"
+                    \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.exe\"
             )
-            if(NOT result EQUAL 0)
-                message(FATAL_ERROR \"codesign failed for ${PROJECT_NAME}.app with exit code ${result}\")
+        ")
+    endif()
+elseif(APPLE)
+    find_program(MACDEPLOYQT_EXECUTABLE macdeployqt HINTS "${QT_BIN_DIR}")
+    if(MACDEPLOYQT_EXECUTABLE)
+        install(CODE "
+            message(STATUS \"Running macdeployqt...\")
+            execute_process(
+                COMMAND \"${MACDEPLOYQT_EXECUTABLE}\"
+                    \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app\"
+                    -verbose=0
+                    -always-overwrite
+                RESULT_VARIABLE _deploy_result
+                ERROR_QUIET
+            )
+            if(NOT _deploy_result EQUAL 0)
+                message(WARNING \"macdeployqt returned \${_deploy_result}\")
             endif()
-        endif()
-    " COMPONENT ${PROJECT_NAME})
+        ")
+    endif()
 endif()
 
-#installLSLApp(${PROJECT_NAME})
+# =============================================================================
+# macOS Code Signing
+# =============================================================================
+if(APPLE)
+    install(CODE "
+        set(_app \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app\")
+        set(_ent \"${CMAKE_CURRENT_SOURCE_DIR}/app.entitlements\")
 
-# TODO: Generate CPack config file for DMG
-#LSLGenerateCPackConfig()
+        message(STATUS \"Signing app bundle...\")
+        execute_process(
+            COMMAND codesign --force --deep --sign - --entitlements \"\${_ent}\" \"\${_app}\"
+            RESULT_VARIABLE _sign_result
+        )
+
+        execute_process(COMMAND codesign --verify --verbose \"\${_app}\" RESULT_VARIABLE _verify_result)
+        if(_verify_result EQUAL 0)
+            message(STATUS \"App bundle signature verified successfully\")
+        else()
+            message(WARNING \"App bundle signature verification failed!\")
+        endif()
+    ")
+endif()
+
+# =============================================================================
+# CPack Configuration
+# =============================================================================
+
+# Detect target architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)")
+    set(PACKAGE_ARCH "arm64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)")
+    set(PACKAGE_ARCH "amd64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(armv7|arm)")
+    set(PACKAGE_ARCH "armhf")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86)")
+    set(PACKAGE_ARCH "i386")
+else()
+    set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+
+# Detect OS for package naming
+if(APPLE)
+    set(PACKAGE_OS "macOS")
+elseif(WIN32)
+    set(PACKAGE_OS "Win")
+else()
+    find_program(LSB_RELEASE lsb_release)
+    if(LSB_RELEASE)
+        execute_process(COMMAND ${LSB_RELEASE} -cs
+            OUTPUT_VARIABLE _codename
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+        if(_codename AND NOT _codename STREQUAL "n/a")
+            set(PACKAGE_OS "${_codename}")
+        else()
+            set(PACKAGE_OS "Linux")
+        endif()
+    else()
+        set(PACKAGE_OS "Linux")
+    endif()
+endif()
+
+set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_VENDOR "Labstreaminglayer")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
+set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PACKAGE_OS}_${PACKAGE_ARCH}")
+set(CPACK_STRIP_FILES ON)
+
+if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+elseif(APPLE)
+    set(CPACK_GENERATOR TGZ)
+else()
+    set(CPACK_GENERATOR DEB TGZ)
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "LabStreamingLayer Developers")
+    set(CPACK_DEBIAN_PACKAGE_SECTION "science")
+    set(CPACK_DEBIAN_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}.deb")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6widgets6, libqt6multimedia6")
+endif()
+
+include(CPack)
