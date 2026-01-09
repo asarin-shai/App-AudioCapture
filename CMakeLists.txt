@@ -187,6 +187,39 @@ endif()
 qt_finalize_target(${PROJECT_NAME})
 
 # =============================================================================
+# Windows: Copy DLLs to build directory for debugging
+# =============================================================================
+if(WIN32)
+    get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
+    execute_process(
+        COMMAND ${_qmake_executable} -query QT_INSTALL_PLUGINS
+        OUTPUT_VARIABLE QT_PLUGINS_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+
+    # Copy runtime DLLs
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        COMMAND_EXPAND_LISTS
+        COMMENT "Copying runtime DLLs for ${PROJECT_NAME}"
+    )
+
+    # Copy Qt plugins
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${QT_PLUGINS_DIR}/platforms"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/platforms"
+    )
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${QT_PLUGINS_DIR}/styles"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/styles"
+    )
+endif()
+
+# =============================================================================
 # Installation
 # =============================================================================
 include(GNUInstallDirs)
