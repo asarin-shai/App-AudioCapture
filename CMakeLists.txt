@@ -58,10 +58,15 @@ else()
     if(LSL_INSTALL_ROOT)
         list(APPEND _lsl_hints "${LSL_INSTALL_ROOT}")
     endif()
-    # Common development layout hints
+    # Common development layout hints (including CLion cmake-build-* directories)
     string(TOLOWER "${CMAKE_BUILD_TYPE}" _build_type_lower)
+    if(MSVC)
+        set(_clion_build_dir "cmake-build-${_build_type_lower}-visual-studio")
+    else()
+        set(_clion_build_dir "cmake-build-${_build_type_lower}")
+    endif()
     foreach(_root IN ITEMS "../liblsl" "../../LSL/liblsl")
-        foreach(_build IN ITEMS "build" "cmake-build-${_build_type_lower}")
+        foreach(_build IN ITEMS "build" "${_clion_build_dir}")
             list(APPEND _lsl_hints "${CMAKE_CURRENT_LIST_DIR}/${_root}/${_build}/install")
         endforeach()
     endforeach()
@@ -321,6 +326,24 @@ elseif(APPLE)
             endif()
         ")
     endif()
+endif()
+
+# =============================================================================
+# MinGW Runtime Deployment
+# Copy MinGW runtime DLLs so executables work outside the build environment
+# =============================================================================
+if(MINGW)
+    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(MINGW_RUNTIME_DLLS
+        "${MINGW_BIN_DIR}/libgcc_s_seh-1.dll"
+        "${MINGW_BIN_DIR}/libstdc++-6.dll"
+        "${MINGW_BIN_DIR}/libwinpthread-1.dll"
+    )
+    foreach(_dll ${MINGW_RUNTIME_DLLS})
+        if(EXISTS "${_dll}")
+            install(FILES "${_dll}" DESTINATION "${INSTALL_BINDIR}")
+        endif()
+    endforeach()
 endif()
 
 # =============================================================================
