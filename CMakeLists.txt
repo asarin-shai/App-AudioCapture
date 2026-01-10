@@ -189,8 +189,6 @@ if(APPLE)
     )
 endif()
 
-qt_finalize_target(${PROJECT_NAME})
-
 # =============================================================================
 # Windows: Copy DLLs to build directory for debugging
 # =============================================================================
