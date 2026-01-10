@@ -52,6 +52,7 @@ if(LSL_SOURCE_DIR)
         add_library(LSL::lsl ALIAS lsl)
     endif()
     set(LSL_FOUND TRUE)
+    include("${LSL_SOURCE_DIR}/cmake/LSLCMake.cmake")
 else()
     # Priority 2 & 3: Try to find installed liblsl
     set(_lsl_hints)
@@ -60,6 +61,9 @@ else()
     endif()
     # Common development layout hints (including CLion cmake-build-* directories)
     string(TOLOWER "${CMAKE_BUILD_TYPE}" _build_type_lower)
+    if(NOT _build_type_lower)
+        set(_build_type_lower "release")
+    endif()
     if(MSVC)
         set(_clion_build_dir "cmake-build-${_build_type_lower}-visual-studio")
     else()
@@ -94,6 +98,7 @@ else()
 
     if(LSL_FOUND)
         message(STATUS "Found installed liblsl: ${LSL_DIR}")
+        include("${LSL_DIR}/LSLCMake.cmake")
     elseif(LSL_FETCH_IF_MISSING)
         # Priority 4: Fetch from GitHub
         message(STATUS "liblsl not found locally, fetching ${LSL_FETCH_REF} from GitHub...")
@@ -113,6 +118,7 @@ else()
             add_library(LSL::lsl ALIAS lsl)
         endif()
         set(LSL_FOUND TRUE)
+        include("${liblsl_SOURCE_DIR}/cmake/LSLCMake.cmake")
         message(STATUS "liblsl fetched and configured")
     else()
         message(FATAL_ERROR
@@ -151,12 +157,7 @@ find_package(Threads REQUIRED)
 # =============================================================================
 # RPATH Configuration (must be set before targets are created)
 # =============================================================================
-if(APPLE)
-    set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks")
-elseif(UNIX AND NOT ANDROID)
-    set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib")
-endif()
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+LSL_configure_rpath()
 
 # =============================================================================
 # Application Target
@@ -247,171 +248,43 @@ install(TARGETS ${PROJECT_NAME}
 # =============================================================================
 # Bundle liblsl with the application
 # =============================================================================
-# Detect if liblsl is from FetchContent (regular target) or find_package (imported)
-set(_lsl_is_fetched FALSE)
-if(TARGET lsl)
-    get_target_property(_lsl_imported lsl IMPORTED)
-    if(NOT _lsl_imported)
-        set(_lsl_is_fetched TRUE)
-    endif()
-endif()
-
-if(APPLE)
-    # macOS: Install framework into app bundle
-    install(CODE "
-        set(_lsl_binary \"$<TARGET_FILE:LSL::lsl>\")
-        cmake_path(GET _lsl_binary PARENT_PATH _lsl_fw_dir)  # Versions/A
-        cmake_path(GET _lsl_fw_dir PARENT_PATH _lsl_fw_dir)  # Versions
-        cmake_path(GET _lsl_fw_dir PARENT_PATH _lsl_fw_dir)  # lsl.framework
-        message(STATUS \"Bundling lsl.framework from: \${_lsl_fw_dir}\")
-        file(COPY \"\${_lsl_fw_dir}\"
-            DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app/Contents/Frameworks\"
-            USE_SOURCE_PERMISSIONS
-        )
-    ")
-elseif(WIN32)
-    if(_lsl_is_fetched)
-        install(TARGETS lsl RUNTIME DESTINATION "${INSTALL_BINDIR}")
-    else()
-        install(IMPORTED_RUNTIME_ARTIFACTS LSL::lsl RUNTIME DESTINATION "${INSTALL_BINDIR}")
-    endif()
-else()
-    # Linux: Use modern CMake install commands that handle symlinks properly
-    if(_lsl_is_fetched)
-        install(TARGETS lsl LIBRARY DESTINATION "${INSTALL_LIBDIR}")
-    else()
-        install(IMPORTED_RUNTIME_ARTIFACTS LSL::lsl LIBRARY DESTINATION "${INSTALL_LIBDIR}")
-    endif()
-endif()
+LSL_install_liblsl(
+    DESTINATION "${INSTALL_LIBDIR}"
+    FRAMEWORK_DESTINATION "${INSTALL_BINDIR}/${PROJECT_NAME}.app/Contents/Frameworks"
+)
 
 # =============================================================================
 # Qt Deployment
 # =============================================================================
-get_target_property(QT_QMAKE_EXECUTABLE Qt6::qmake IMPORTED_LOCATION)
-get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
-
-if(WIN32)
-    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${QT_BIN_DIR}")
-    if(WINDEPLOYQT_EXECUTABLE)
-        install(CODE "
-            message(STATUS \"Running windeployqt...\")
-            execute_process(
-                COMMAND \"${WINDEPLOYQT_EXECUTABLE}\"
-                    --no-translations
-                    --no-system-d3d-compiler
-                    --no-opengl-sw
-                    --no-compiler-runtime
-                    --dir \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}\"
-                    \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.exe\"
-            )
-        ")
-    endif()
-elseif(APPLE)
-    find_program(MACDEPLOYQT_EXECUTABLE macdeployqt HINTS "${QT_BIN_DIR}")
-    if(MACDEPLOYQT_EXECUTABLE)
-        install(CODE "
-            message(STATUS \"Running macdeployqt...\")
-            execute_process(
-                COMMAND \"${MACDEPLOYQT_EXECUTABLE}\"
-                    \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app\"
-                    -verbose=0
-                    -always-overwrite
-                RESULT_VARIABLE _deploy_result
-                ERROR_QUIET
-            )
-            if(NOT _deploy_result EQUAL 0)
-                message(WARNING \"macdeployqt returned \${_deploy_result}\")
-            endif()
-        ")
-    endif()
-endif()
+LSL_deploy_qt(TARGET "${PROJECT_NAME}" DESTINATION "${INSTALL_BINDIR}")
 
 # =============================================================================
 # MinGW Runtime Deployment
-# Copy MinGW runtime DLLs so executables work outside the build environment
 # =============================================================================
-if(MINGW)
-    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
-    set(MINGW_RUNTIME_DLLS
-        "${MINGW_BIN_DIR}/libgcc_s_seh-1.dll"
-        "${MINGW_BIN_DIR}/libstdc++-6.dll"
-        "${MINGW_BIN_DIR}/libwinpthread-1.dll"
-    )
-    foreach(_dll ${MINGW_RUNTIME_DLLS})
-        if(EXISTS "${_dll}")
-            install(FILES "${_dll}" DESTINATION "${INSTALL_BINDIR}")
-        endif()
-    endforeach()
-endif()
+LSL_install_mingw_runtime(DESTINATION "${INSTALL_BINDIR}")
 
 # =============================================================================
 # macOS Code Signing
 # =============================================================================
-if(APPLE)
-    install(CODE "
-        set(_app \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_BINDIR}/${PROJECT_NAME}.app\")
-        set(_ent \"${CMAKE_CURRENT_SOURCE_DIR}/app.entitlements\")
-
-        message(STATUS \"Signing app bundle...\")
-        execute_process(
-            COMMAND codesign --force --deep --sign - --entitlements \"\${_ent}\" \"\${_app}\"
-            RESULT_VARIABLE _sign_result
-        )
-
-        execute_process(COMMAND codesign --verify --verbose \"\${_app}\" RESULT_VARIABLE _verify_result)
-        if(_verify_result EQUAL 0)
-            message(STATUS \"App bundle signature verified successfully\")
-        else()
-            message(WARNING \"App bundle signature verification failed!\")
-        endif()
-    ")
-endif()
+LSL_codesign(
+    TARGET "${PROJECT_NAME}"
+    DESTINATION "${INSTALL_BINDIR}"
+    ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/app.entitlements"
+    BUNDLE
+)
 
 # =============================================================================
 # CPack Configuration
 # =============================================================================
-
-# Detect target architecture
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)")
-    set(PACKAGE_ARCH "arm64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)")
-    set(PACKAGE_ARCH "amd64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(armv7|arm)")
-    set(PACKAGE_ARCH "armhf")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(i.86|x86)")
-    set(PACKAGE_ARCH "i386")
-else()
-    set(PACKAGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-
-# Detect OS for package naming
-if(APPLE)
-    set(PACKAGE_OS "macOS")
-elseif(WIN32)
-    set(PACKAGE_OS "Win")
-else()
-    find_program(LSB_RELEASE lsb_release)
-    if(LSB_RELEASE)
-        execute_process(COMMAND ${LSB_RELEASE} -cs
-            OUTPUT_VARIABLE _codename
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET)
-        if(_codename AND NOT _codename STREQUAL "n/a")
-            set(PACKAGE_OS "${_codename}")
-        else()
-            set(PACKAGE_OS "Linux")
-        endif()
-    else()
-        set(PACKAGE_OS "Linux")
-    endif()
-endif()
+LSL_get_target_arch()
+LSL_get_os_name()
 
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "Labstreaminglayer")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
-set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${PACKAGE_OS}_${PACKAGE_ARCH}")
+set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-${LSL_OS}_${LSL_ARCH}")
 set(CPACK_STRIP_FILES ON)
 
 if(WIN32)
