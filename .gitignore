@@ -1,5 +1,6 @@
 ui_*.h
 /build*/
+/install*/
 /CMakeLists.txt.user
 /CMakeLists.json
 /CMakeSettings.json
@@ -8,4 +9,4 @@ out/
 .DS_Store
 LSL/
 liblsl.tar.bz2
-
+.idea/
