@@ -46,7 +46,8 @@ QAudioFormat::SampleFormat stringToSampleFormat(const QString &str) {
     return QAudioFormat::Unknown;
 }
 
-MainWindow::MainWindow(QWidget *parent, const char *config_file)
+MainWindow::MainWindow(QWidget *parent, const char *config_file,
+	const QCommandLineParser &parser)
 	: QMainWindow(parent), ui(new Ui::MainWindow),
 	  devices(QMediaDevices::audioInputs()) {
 	if(devices.empty()) {
@@ -87,7 +88,39 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 
 	QString cfgfilepath = find_config_file(config_file);
 	load_config(cfgfilepath);
+	applyRuntimeConfiguration(parser);
 	checkAudioFormat(cfgfilepath.length() > 0);
+	if (parser.isSet("auto-link") || qEnvironmentVariableIntValue("AUDIOCAPTURE_AUTO_LINK") > 0)
+		toggleRecording();
+}
+
+void MainWindow::applyRuntimeConfiguration(const QCommandLineParser &parser) const {
+	auto const setIfPresent = [&parser](const char *opt, const char *env) {
+		if (parser.isSet(opt)) return parser.value(opt);
+		return qEnvironmentVariable(env);
+	};
+
+	if (const auto name = setIfPresent("name", "AUDIOCAPTURE_NAME"); !name.isEmpty())
+		ui->input_name->setText(name);
+
+	if (const auto deviceName = setIfPresent("device", "AUDIOCAPTURE_DEVICE"); !deviceName.isEmpty()) {
+		const auto idx = ui->input_device->findText(deviceName);
+		if (idx >= 0) ui->input_device->setCurrentIndex(idx);
+	}
+
+	if (const auto samplerate = setIfPresent("samplerate", "AUDIOCAPTURE_SAMPLERATE"); !samplerate.isEmpty())
+		ui->input_samplerate->setValue(samplerate.toInt());
+
+	if (const auto sampleformat = setIfPresent("sampleformat", "AUDIOCAPTURE_SAMPLEFORMAT"); !sampleformat.isEmpty()) {
+		const auto idx = ui->input_sampleformat->findText(sampleformat, Qt::MatchFixedString);
+		if (idx >= 0) ui->input_sampleformat->setCurrentIndex(idx);
+	}
+
+	if (const auto channels = setIfPresent("channels", "AUDIOCAPTURE_CHANNELS"); !channels.isEmpty())
+		ui->input_channels->setValue(channels.toInt());
+
+	if (const auto bufferMs = setIfPresent("buffer-ms", "AUDIOCAPTURE_BUFFER_MS"); !bufferMs.isEmpty())
+		ui->input_buffersize->setValue(bufferMs.toInt());
 }
 
 QAudioDevice MainWindow::currentDevice() const {
@@ -164,8 +197,9 @@ void MainWindow::load_config(const QString &filename) const {
 	ui->input_device->setCurrentIndex(settings.value("AudioCapture/device", 0).toInt());
 	ui->input_samplerate->setValue(settings.value("AudioCapture/samplerate", 1).toInt());
 	const QString sampleSize = settings.value("AudioCapture/samplesize", "Int16").toString();
-	ui->input_sampleformat->setCurrentIndex(ui->input_sampleformat->findData(QVariant::fromValue(sampleSize)));
+	ui->input_sampleformat->setCurrentIndex(ui->input_sampleformat->findText(sampleSize, Qt::MatchFixedString));
 	ui->input_channels->setValue(settings.value("AudioCapture/channels", 0).toInt());
+	ui->input_buffersize->setValue(settings.value("AudioCapture/buffersize_ms", 100).toInt());
 }
 
 void MainWindow::save_config(const QString &filename) const {
@@ -176,6 +210,7 @@ void MainWindow::save_config(const QString &filename) const {
 	settings.setValue("samplerate", ui->input_samplerate->value());
 	settings.setValue("samplesize", ui->input_sampleformat->currentText());
 	settings.setValue("channels", ui->input_channels->value());
+	settings.setValue("buffersize_ms", ui->input_buffersize->value());
 	settings.sync();
 }
 
@@ -207,8 +242,8 @@ void MainWindow::toggleRecording() {
 
 		// Create the AudioSource
 		audiosrc = std::make_unique<QAudioSource>(currentDevice(), fmt, this);
-		// auto const buffer_ms = ui->input_buffersize->value();
-		// audiosrc->setBufferSize(fmt.bytesForDuration(2 * buffer_ms * 1000));
+		auto const buffer_ms = ui->input_buffersize->value();
+		audiosrc->setBufferSize(fmt.bytesForDuration(2 * buffer_ms * 1000));
 
 		// Start sinking audio data to the LSL IO device
 		audiosrc->start(&*reader);

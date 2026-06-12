@@ -3,6 +3,7 @@
 #include "ui_mainwindow.h"
 #include <QMediaDevices>
 #include <QAudioDevice>
+#include <QCommandLineParser>
 #include <QMainWindow>
 #include <memory> //for std::unique_ptr
 
@@ -13,7 +14,8 @@ class MainWindow;
 class MainWindow : public QMainWindow {
 	Q_OBJECT
 public:
-	explicit MainWindow(QWidget *parent, const char *config_file);
+	explicit MainWindow(QWidget *parent, const char *config_file,
+		const QCommandLineParser &parser);
 	~MainWindow() noexcept override;
 
 private slots:
@@ -33,6 +35,7 @@ private:
 	QString find_config_file(const char *filename);
 	void load_config(const QString &filename) const;
 	void save_config(const QString &filename) const;
+	void applyRuntimeConfiguration(const QCommandLineParser &parser) const;
 	std::unique_ptr<class LslPusher> reader;
 	std::unique_ptr<class QAudioSource> audiosrc;
 	std::unique_ptr<Ui::MainWindow> ui; // window pointer
