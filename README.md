@@ -23,6 +23,36 @@ Using this app is very simple:
   * You should now have a stream on your lab network that has type "Audio" and its name is the name entered in the GUI.
   * Note that you cannot close the app while it is linked.
 
+## Non-interactive configuration
+
+All capture settings can now be provided without using the GUI. Priority is:
+
+1. Command-line options
+2. Environment variables
+3. `.cfg` file values
+4. Built-in defaults / device preferred format
+
+Available CLI options:
+
+* `--name <name>`
+* `--device <description>`
+* `--samplerate <hz>`
+* `--sampleformat <UInt8|Int16|Int32|Float>`
+* `--channels <count>`
+* `--buffer-ms <ms>`
+* `--auto-link`
+* positional arg: `<config>` path to a `.cfg` file
+
+Equivalent environment variables:
+
+* `AUDIOCAPTURE_NAME`
+* `AUDIOCAPTURE_DEVICE`
+* `AUDIOCAPTURE_SAMPLERATE`
+* `AUDIOCAPTURE_SAMPLEFORMAT`
+* `AUDIOCAPTURE_CHANNELS`
+* `AUDIOCAPTURE_BUFFER_MS`
+* `AUDIOCAPTURE_AUTO_LINK` (set to `1` to start streaming automatically)
+
 # Build from source
 
 ## Pre-requisites
